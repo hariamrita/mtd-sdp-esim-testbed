@@ -8,29 +8,30 @@ START_README
 
 This repository contains the experimental artifacts used in the evaluation of the **MTD-SDP-eSIM framework**, a hardware-anchored Zero Trust architecture integrating **Software-Defined Perimeter (SDP)**, **Software-Defined Networking (SDN)**, and **Moving Target Defense (MTD)** for secure eSIM provisioning in 6G IoT environments.
 
-The testbed implements the architecture described in **Section 6.1 (Experimental Setup)** of the manuscript and enables reproducible evaluation of:
+The testbed corresponds to the experimental setup described in **Section 6.1 of the manuscript** and enables reproducible evaluation of:
 
 - Network Address Shuffling (NAS)
 - ES-SPA authentication workflow
 - ZTA policy enforcement
-- eSIM Remote SIM Provisioning (RSP) flows
+- eSIM Remote SIM Provisioning (RSP)
 - Dynamic defense orchestration
 
 ---
 
 # System Architecture
 
-The testbed uses a **hybrid simulation–emulation architecture**.
+The testbed uses a **hybrid simulation–emulation architecture** combining ns-3 simulation with a containerized 6G core and programmable data plane.
 
 | Component | Role |
 |-----------|------|
-| ns-3 (v3.42) | Simulates 6G RAN, UE mobility, and traffic generation |
-| 6G-Library (ns-3 module) | Models sub-THz communication and 6G radio parameters |
-| Open5GS (v2.7.1) | Emulates the 6G core network including SM-DP+ and SM-DS |
-| ONOS (v2.7.0) | Implements the Zero Trust controller and policy engine |
-| BMv2 P4 Switch | Data-plane enforcement of security policies |
-| P4Runtime | Control-plane interface between ONOS and P4 switches |
-| TAP/Bridge Interfaces | Connect simulated traffic to emulated network stack |
+| **ns-3 (v3.42)** | Simulates 6G RAN, UE mobility, and traffic generation |
+| **6G-Library module** | Models sub-THz communication and 6G radio parameters |
+| **Open5GS (v2.7.1)** | Emulates 6G core network functions including SM-DP+ |
+| **ONOS (v2.7.0)** | Implements the Zero Trust controller |
+| **BMv2 P4 Switch** | Programmable data-plane enforcement |
+| **P4Runtime** | Controller–switch communication |
+| **SDP Core** | Provides Software-Defined Perimeter access control |
+| **TAP / Bridge Interfaces** | Connect simulation traffic to emulated network |
 
 Architecture overview:
 
@@ -39,15 +40,17 @@ UEs (ns-3 simulation)
         |
       gNB
         |
-  TAP / Bridge Interface
+   TAP / Bridge
         |
    BMv2 P4 Switch
         |
-     Open5GS Core
+    Open5GS Core
         |
      SM-DP+ / SM-DS
         |
    ONOS ZTA Controller
+        |
+      SDP Core
         |
      MTD NAS Module
 ```
@@ -57,7 +60,7 @@ UEs (ns-3 simulation)
 # Repository Structure
 
 ```
-MTD-SDP-eSIM/
+mtd-sdp-esim-testbed
 │
 ├── ns3-simulation/
 │   ├── ue-mobility.cc
@@ -67,6 +70,12 @@ MTD-SDP-eSIM/
 ├── p4-programs/
 │   ├── nas_switch.p4
 │   └── pipeline.json
+│
+├── sdp-core/
+│   ├── controller/
+│   ├── client/
+│   ├── gateway/
+│   └── crypto/
 │
 ├── onos-controller/
 │   ├── zta-policy-engine/
@@ -81,11 +90,28 @@ MTD-SDP-eSIM/
 │   ├── deploy-p4.sh
 │   └── run-experiment.sh
 │
-└── results/
-    ├── scalability/
-    ├── dos-resilience/
-    └── provisioning-latency/
+├── results/
+│   ├── scalability/
+│   ├── dos-resilience/
+│   └── provisioning-latency/
+│
+└── README.md
 ```
+
+---
+
+# SDP Core Implementation
+
+The `sdp-core` directory contains the Software-Defined Perimeter implementation used in this testbed.  
+It originates from an earlier internal project developed by our research team and is integrated here to provide the baseline SDP access control mechanisms required by the MTD-SDP-eSIM architecture.
+
+The SDP components provide:
+
+- Secure device authentication
+- Access gateway enforcement
+- Controller-driven policy management
+
+These modules are used by the **ZTA controller** to establish identity-based access control prior to provisioning.
 
 ---
 
@@ -96,8 +122,8 @@ Tested on:
 ```
 Ubuntu 22.04 LTS
 Kernel >= 5.15
-Docker >= 24.0
 Python >= 3.10
+Docker >= 24.0
 ```
 
 Recommended hardware:
@@ -125,14 +151,14 @@ git checkout ns-3.42
 ./ns3 build
 ```
 
-Install the **6G-Library module**:
+Install the 6G simulation module:
 
 ```
 cd contrib
 git clone https://github.com/<your-repo>/ns3-6g-library.git
 ```
 
-Rebuild:
+Rebuild ns-3:
 
 ```
 ./ns3 build
@@ -162,14 +188,14 @@ sudo systemctl start open5gs-upfd
 sudo apt install p4lang-bmv2 p4lang-p4c
 ```
 
-Compile P4 program:
+Compile the P4 pipeline:
 
 ```
 cd p4-programs
 p4c --target bmv2 --arch v1model nas_switch.p4
 ```
 
-Run switch:
+Run the switch:
 
 ```
 simple_switch_grpc pipeline.json
@@ -196,32 +222,32 @@ bazel run onos-local
 
 # Running the Testbed
 
-### Step 1 Start Core Network
+### Step 1 — Start Open5GS Core
 
 ```
 sudo systemctl start open5gs
 ```
 
-### Step 2 Launch P4 Switch
+### Step 2 — Launch P4 Switch
 
 ```
 ./scripts/deploy-p4.sh
 ```
 
-### Step 3 Start ONOS Controller
+### Step 3 — Start ONOS Controller
 
 ```
 onos-service start
 ```
 
-### Step 4 Start ns-3 Simulation
+### Step 4 — Run ns-3 Simulation
 
 ```
 cd ns3-simulation
 ./ns3 run provisioning-scenario
 ```
 
-### Step 5 Trigger NAS Events
+### Step 5 — Trigger NAS Events
 
 ```
 python scripts/run-experiment.sh
@@ -232,7 +258,7 @@ python scripts/run-experiment.sh
 # Reproducing Experiments
 
 | Experiment | Script |
-|------------|-------|
+|-----------|-------|
 | DoS Resilience | scripts/run-dos-test.sh |
 | Provisioning Scalability | scripts/run-scale-test.sh |
 | NAS Effectiveness | scripts/run-nas-eval.sh |
@@ -246,12 +272,11 @@ results/
 
 ---
 
-# Key Parameters
+# Key Experimental Parameters
 
 | Parameter | Value |
 |-----------|------|
 | Fleet size | 100–1000 devices |
-| NAS shuffle interval | adaptive |
 | Threat threshold θ | 0.5 |
 | Shuffle effectiveness ε | 0.15 |
 | Experimental runs | 30 |
@@ -259,6 +284,8 @@ results/
 ---
 
 # Citation
+
+If you use this artifact, please cite:
 
 ```
 @article{MTD-SDP-eSIM,
